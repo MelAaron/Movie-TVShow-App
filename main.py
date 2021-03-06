@@ -2,17 +2,20 @@ from kivymd.app import MDApp
 from kivymd.uix.button import MDFlatButton, MDFloatingActionButton
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.dialog import MDDialog
-# from content import KV, KC, list_helper
+#from content import KV, KC, list_helper, check
 from kivy.uix.boxlayout import BoxLayout
 from kivy.lang import Builder
 from kivymd.uix.list import OneLineAvatarIconListItem, OneLineListItem
 from kivy.storage.jsonstore import JsonStore
-
+# from kivy.uix.screenmanager import ScreenManager, Screen
 
 KV = """
 <Content>
     MDTextField:
-        hint_text: "Movie"
+        hint_text: "Here"
+        required: True
+        helper_text_mode: "on_error"
+        helper_text: "Enter text"
 """
 
 KC = """
@@ -30,9 +33,40 @@ Screen:
         orientation:'vertical'
         MDToolbar:
             title: 'Movies'
-        ScrollView:
-            MDList:
-                id: container
+        #ScrollView:
+            #MDList:
+                #id: container
+
+        MDBottomNavigation:
+            MDBottomNavigationItem:
+                name:"Movies"
+                icon: "movie"
+                text: "Movies"
+                #on_release: app.toggleScreen()
+                #id:
+
+                ScrollView:
+                    MDList:
+                        id: containerMovies
+
+                MDFloatingActionButton:
+                    icon:'language-python'
+                    pos_hint:{'center_x': 0.5, 'center_y': 0.1}
+                    on_release: app.addDialog(containerMovies)
+
+            MDBottomNavigationItem:
+                name:"TV Shows"
+                icon: "television-classic"
+                text: "TV Shows"
+
+                ScrollView:
+                    MDList:
+                        id: containerShows
+
+                MDFloatingActionButton:
+                    icon:'language-python'
+                    pos_hint:{'center_x': 0.5, 'center_y': 0.1}
+                    on_release: app.addDialogShow(containerShows)
 """
 
 check = """
@@ -45,8 +79,8 @@ CheckBoxRightWidget:
 """
 
 class Media:
-    def __init__(self, id, name, rating):
-        self.id = id
+    def __init__(self, name, rating, media):
+        self.media = media
         self.name = name
         self.rating = rating
 
@@ -72,39 +106,55 @@ class ItemConfirm(OneLineAvatarIconListItem):
 class DemoApp(MDApp):
 
     def build(self):
-        self.theme_cls.primary_palette = 'Orange'#(1, 193/255.0, 7/255.0, 1)
+        self.icon = 'Icon.png'
+        self.theme_cls.primary_palette = 'Orange'  # (1, 193/255.0, 7/255.0, 1)
         self.mediaList = []
         self.store = JsonStore('store.json')
         screen = Builder.load_string(list_helper)
         btn_flat = MDFloatingActionButton(icon='language-python',
-                                          pos_hint={'center_x': 0.8, 'center_y': 0.1},
+                                          pos_hint={'center_x': 0.5, 'center_y': 0.1},
                                           on_release=self.addDialog)
         self.movieInput = Builder.load_string(KV)
         self.movieRating = Builder.load_string(KC)
 
         self.movieCount = 0
-        screen.add_widget(btn_flat)
+        # screen.add_widget(btn_flat)
         return screen
 
-    def addToMovieList(self, name, rating):
-        self.mediaList.append(Media(self.movieCount, name, rating))
+    def addToMovieList(self, name, rating, media):
+        if name == "":
+            return
+        self.mediaList.append(Media(name, rating, media))
         # self.store.put(self.movieCount, id=self.movieCount, name=name, rating=rating)
 
         item = OneLineListItem(text=name, on_release=self.ratingDialog)
         self.movieCount += 1
-        self.root.ids.container.add_widget(item)
+        self.root.ids.containerMovies.add_widget(item)
 
         self.selectedMovieListItem = item
         self.colorMovie(rating)
 
+    def addToShowList(self, name, rating, media):
+        self.mediaList.append(Media(name, rating, media))
+        # self.store.put(self.movieCount, id=self.movieCount, name=name, rating=rating)
+
+        item = OneLineListItem(text=name, on_release=self.ratingDialog)
+        self.movieCount += 1
+        self.root.ids.containerShows.add_widget(item)
+
+        self.selectedMovieListItem = item
+        self.colorMovie(rating)
 
     def on_start(self):
         for key in self.store.keys():
-            self.addToMovieList(str(key), str(self.store.get(key)['rating']))
+            if str(self.store.get(key)['media']) == "movie":
+                self.addToMovieList(str(key), str(self.store.get(key)['rating']), str(self.store.get(key)['media']))
+            else:
+                self.addToShowList(str(key), str(self.store.get(key)['rating']), str(self.store.get(key)['media']))
 
     def on_stop(self):
         for i in self.mediaList:
-            self.store.put(i.name, rating=i.rating)
+            self.store.put(i.name, rating=i.rating, media=i.media)
 
     def ratingDialog(self, obj):
         self.selectedMovieListItem = obj
@@ -123,9 +173,21 @@ class DemoApp(MDApp):
         self.dialog.open()
 
     def addDialog(self, obj):
+        # print(obj.ids.containerMovies == None)
+
         close_btn = MDFlatButton(text='Close', on_release=self.close_dialog)
         add_btn = MDFlatButton(text='Add', on_release=self.addMovie)
         self.dialog = MDDialog(title='Add Movie',
+                               type='custom',
+                               content_cls=Content(),
+                               size_hint=(0.7, 1),
+                               buttons=[add_btn, close_btn])
+        self.dialog.open()
+
+    def addDialogShow(self, obj):
+        close_btn = MDFlatButton(text='Close', on_release=self.close_dialog)
+        add_btn = MDFlatButton(text='Add', on_release=self.addShow)
+        self.dialog = MDDialog(title='Add TV Show',
                                type='custom',
                                content_cls=Content(),
                                size_hint=(0.7, 1),
@@ -139,10 +201,21 @@ class DemoApp(MDApp):
         for obj in self.dialog.content_cls.children:
             if isinstance(obj, MDTextField):
                 # print(obj.text)
-                self.store.put(obj.text, rating="")
-                self.addToMovieList(obj.text, "")
-                self.dialog.dismiss()
-        self.dialog.dismiss()
+                if obj.text != "":
+                    self.store.put(obj.text, rating="", media='movie')
+                    self.addToMovieList(obj.text, "", 'movie')
+                    self.dialog.dismiss()
+        # self.dialog.dismiss()
+
+
+    def addShow(self, obj):
+        for obj in self.dialog.content_cls.children:
+            if isinstance(obj, MDTextField):
+                # print(obj.text)
+                if obj.text != "":
+                    self.store.put(obj.text, rating="", media='show')
+                    self.addToShowList(obj.text, "", 'show')
+                    self.dialog.dismiss()
 
     def rateMovie(self, obj):
         for obj in self.dialog.items:
@@ -153,7 +226,7 @@ class DemoApp(MDApp):
                     for media in self.mediaList:
                         if media.name == self.selectedMovieListItem.text:
                             media.setRating(obj.text)
-                            self.store.put(media.name, rating=media.rating)
+                            self.store.put(media.name, rating=media.rating, media=media.media)
                             break
                     # print(obj.text)
         self.dialog.dismiss()
@@ -162,14 +235,16 @@ class DemoApp(MDApp):
         idz = 0
         for media in self.mediaList:
             if media.name == self.selectedMovieListItem.text:
-                #print(media.name + " " + str(media.id))
                 break
             idz += 1
-        print(idz)
+        if self.mediaList[idz].media == "movie":
+            self.root.ids.containerMovies.remove_widget(self.selectedMovieListItem)
+        else:
+            self.root.ids.containerShows.remove_widget(self.selectedMovieListItem)
         self.mediaList.pop(idz)
         self.store.delete(self.selectedMovieListItem.text)
         self.movieCount -= 1
-        self.root.ids.container.remove_widget(self.selectedMovieListItem)
+
         self.dialog.dismiss()
 
     def colorMovie(self, rating):
@@ -179,6 +254,8 @@ class DemoApp(MDApp):
             self.selectedMovieListItem.bg_color = (255 / 255.0, 255 / 255.0, 204 / 255.0, 1)
         elif rating == "Bad":
             self.selectedMovieListItem.bg_color = (255 / 255.0, 153 / 255.0, 153 / 255.0, 1)
+
+    # def toggleScreen(self):
 
 
 DemoApp().run()
