@@ -32,7 +32,7 @@ Screen:
     BoxLayout:
         orientation:'vertical'
         MDToolbar:
-            title: 'Movies'
+            title: 'Movies and TV Shows'
         #ScrollView:
             #MDList:
                 #id: container
